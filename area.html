@@ -1,0 +1,928 @@
+<!DOCTYPE html>
+<style>
+  /* set the CSS */
+
+  body {
+    margin: 0px;
+    font-family: canada-type-gibson, sans-serif;
+    background: #F5F4F5;
+  }
+  span, text {
+    font-weight: 100;
+  }
+
+  .line {
+    fill: none;
+    stroke: #DF0072;
+    stroke-width: 2px;
+  }
+  .line2 {
+    fill: none;
+    stroke: steelblue;
+    stroke-width: 2px;
+  }
+
+  .area {
+    fill: #4ca3bd;
+  }
+
+  #hoverData {
+    position: absolute;
+    height: 40px;
+    margin: 0px auto;
+    top: 20px;
+  }
+
+  #header {
+    background: rgb(27, 61, 103);
+  }
+
+  .title {
+    font-size: 26px;
+    font-weight: 100;
+    text-transform: uppercase;
+    letter-spacing: 1.7px;
+    display: block;
+    line-height: 26px;
+    color: rgb(27, 61, 103);
+    margin: 10px auto;
+    margin-top: 40px;
+    text-align: center;
+    position: absolute;
+    z-index: 4;
+    left: 0px;
+    top: 50px;
+    right: 0px;
+  }
+  #chart {
+    width: 100%;
+    height: 80vh;
+    margin-top: 25px;
+    position: absolute;
+    background: #F5F4F5;
+    z-index: 3;
+    border-bottom: 1px solid lightgrey;
+    padding-bottom: 30px;
+  }
+
+  .regionTitle {
+    width: 100%;
+    text-align: center;
+    text-transform: uppercase;
+    font-weight: 100;
+  }
+  .regionSubTitle {
+    width: 100%;
+    text-align: center;
+    font-weight: 100;
+    font-size: 14px;
+  }
+
+  #regions {
+    margin-top: 80vh;
+    width: 100%;
+    padding-top: 150px;
+  }
+
+  #regionChart {
+    height: 300px;
+  }
+
+  #regionChart,
+  #regionMap {
+    width: 49%;
+    z-index: 10;
+  }
+
+  #placeholder {
+    height: 200vh
+  }
+  #crimetypes {
+    width: 100%;
+    height: 400px;
+  }
+  #crimeTranslation {
+    margin-top: 150px;
+  }
+  .bubbleText {
+    stroke: black;
+    fill: black;
+  }
+  .comparer {
+    text-align: center;
+    margin: 40px auto;
+  }
+  #arrests_compare, #prisoners_compare {
+    width: 100%;
+    height: 300px;
+  }
+  #everything {
+    width: 100%;
+    height: 89vh;
+  }
+  hr {
+    margin: 100px 0px;
+  }
+  #helper {
+    color: #DF0072;
+    font-size: 10px;
+    font-weight: 100;
+    position: absolute;
+    text-align: center;
+    left: 0px;
+    right: 0px;
+    bottom: 20px;
+  }
+</style>
+
+<body>
+  <script src="https://d3js.org/d3.v4.min.js"></script>
+  <script src="https://d3js.org/d3-scale-chromatic.v1.min.js"></script>
+  <div id="header">
+    <img src="/logo.png">
+  </div>
+  <h3 class="title"> Crime in the United States </h3>
+  <div id="chart">
+    <div id="helper">(Use the line above to navigate time throughout this page)</div>
+  </div>
+
+  <div id="regions">
+    <h3 class="regionTitle"> Crime by Region </h3>
+    <h6 class="regionTitle"> Hover over the line above to move through time </h6>
+    <svg id="regionChart"></svg>
+    <svg id="regionMap"></svg>
+  </div>
+  <hr>
+  <div id="crimeTranslation">
+    <h3 class="regionTitle"> Prison Rates </h3>
+    <h6 class="regionTitle"> How crimes translate to prisoners </h6>
+    <svg id="crimetypes"></svg>
+    <div id="hoverData"></div>
+  </div>
+  <hr>
+  <div id="population">
+    <h3 class="regionTitle"> Crime distribution by populations </h3>
+    <div class="comparer">
+        <span> Compare arrests of</span>
+        <select name="comp_a_1">
+          <option value="total" selected>All</option>
+          <option value="White">White</option>
+          <option value="Black or African American">Black or African American</option>
+          <option value="American Indian and Alaska Native">American Indian and Alaska Native</option>
+          <option value="Asian or Pacific Islander">Asian or Pacific Islander</option>
+        </select>
+        <span> persons, who are </span>
+        <select name="comp_a_2">
+          <option value="All Ages" selected>from all ages</option>
+          <option value="18 or over">over 18</option>
+          <option value="Under 18">under 18</option>
+        </select>
+        <span> as a percentage of </span>
+        <select name="comp_a_3">
+          <option value="total" selected>All</option>
+          <option value="White">White</option>
+          <option value="Black or African American">Black or African American</option>
+          <option value="American Indian and Alaska Native">American Indian and Alaska Native</option>
+          <option value="Asian or Pacific Islander">Asian or Pacific Islander</option>
+        </select>
+        <span> persons.</span>
+    </div>
+    <svg id="arrests_compare"></svg>
+    <!-- <svg id="prisoners_compare"></svg> -->
+  </div>
+  <div>
+    <hr>
+    <h3 class="regionTitle"> Draw your own conclusions </h3>
+    <h6 class="regionSubTitle">
+      The graph below shows normalized trends.
+      Hover over a line to it's relative change.</h6>
+    <div class="regionSubTitle" id="ehoverData"></div>
+    <div id="everything"></div>
+  </div>
+  <script>
+
+    var selectedYear = '2015'
+
+    // ==================================================
+    // Main crime chart
+    // ==================================================
+    var parseTime = d3.timeParse("%d-%b-%y"),
+      bisectDate = d3.bisector(d => d.date).left,
+      color = d3.scaleOrdinal(d3.schemeCategory20),
+      margin = {
+        top: 40,
+        right: 40,
+        bottom: 40,
+        left: 40
+      },
+      width = parseInt(d3.select("#chart").style("width")) - margin.left - margin.right,
+      height = parseInt(d3.select("#chart").style("height")) - margin.top - margin.bottom;
+    x = d3.scaleTime().range([0, width]),
+      y = d3.scaleLinear().range([height, 0]);
+
+    var valueline = d3.area()
+      .defined(function(d) {
+        return d.val != 0 &&
+          d.val != 'nan' &&
+          !isNaN(d.val)
+      })
+      .x(function(d) {
+        return x(d.date);
+      })
+      .y0(height)
+      .y(function(d) {
+        return y(d.val);
+      });
+
+    var svg = d3.select("#chart").append("svg")
+      .attr("width", width + margin.left + margin.right)
+      .attr("height", height + margin.top + margin.bottom)
+      .append("g")
+      .attr("transform",
+        "translate(" + margin.left + "," + margin.top + ")");
+
+    var formatYears = function(years) {
+      return years.map(function(y) {
+        return new Date(String(y))
+      });
+    }
+
+    // Scale the range of the data
+    var totalYears = [1980, 1981, 1982, 1983, 1984, 1985, 1986, 1987, 1988,
+      1989, 1990, 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002,
+      2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015
+    ]
+
+    x.domain(d3.extent(formatYears(totalYears)));
+    y.domain([4500, 11000]);
+
+    d3.json("data.json", function(error, data) {
+      var all_series = {}
+      var getSeries = function(d, name) {
+        for (var i in d) {
+          thisName = name.concat([i])
+          if (Array.isArray(d[i]) && i !== 'years') {
+            var normalized = d3.max(d[i].map(n => n != 'na' ? n : 0))
+            d[i] = d[i].map(function(v, iter) {
+              nameStr = thisName.join(" ")
+              all_series[nameStr] = all_series[nameStr] || []
+              year = data[name[0]].years[iter]
+              all_series[nameStr].push({
+                val: v,
+                valNor: (v / normalized || 0).toFixed(10),
+                year: String(year),
+                date: new Date(String(year)),
+                name: thisName
+              })
+            });
+          } else {
+            getSeries(d[i], thisName)
+          }
+        }
+      }
+      getSeries(data, [])
+
+      // Add the total line
+      var pCr = "crime_rates Crime Rate by Type (per 100,000 persons) Property Crime total"
+      var vCr = "crime_rates Crime Rate by Type (per 100,000 persons) Violent Crime total"
+      totalCrime = all_series[pCr].map(function(d, i) {
+        d.val = d.val + all_series[pCr][i].val
+        d.name = 'Total Crime'
+        return d
+      })
+
+      svg.append("path")
+        .data([totalCrime])
+        .attr("class", "line")
+        .attr("d", valueline)
+        .style('stroke-width', '3')
+        .style("stroke-linecap", "round")
+        .on("mouseover", function(d) {
+          var name = d[0].name
+          d3.select("div#hoverData").text(function(d) { return name; })
+          d3.select(this).style('stroke', '#ff8e01');
+        })
+        .on("mouseout", function(d) {
+          d3.select(this).style('stroke', color(1));
+        });
+
+      // Add the X Axis
+      svg.append("g")
+        .attr("transform", "translate(0," + height + ")")
+        .call(d3.axisBottom(x));
+
+      // Add the Y Axis
+      // svg.append("g")
+      //     .call(d3.axisLeft(y));
+
+      const focus = svg.append('g')
+        .attr('class', 'focus')
+        .style('display', 'none');
+
+      focus.append('circle')
+        .attr('r', 4.5);
+
+      focus.append('line')
+        .classed('x', true);
+
+      focus.append('line')
+        .classed('y', true);
+
+      focus.append('text')
+        .attr('x', 9)
+        .attr('dy', '.35em');
+
+      svg.append('rect')
+        .attr('class', 'overlay')
+        .attr('width', width)
+        .attr('height', height)
+        .on('mouseover', () => focus.style('display', null))
+        // .on('mouseout', () => focus.style('display', 'none'))
+        .on('mousemove', mousemove);
+
+      function mousemove() {
+        const x0 = x.invert(d3.mouse(this)[0]);
+        const i = bisectDate(totalCrime, x0, 1);
+        const d0 = totalCrime[i - 1];
+        const d1 = totalCrime[i];
+        const d = x0 - d0.date > d1.date - x0 ? d1 : d0;
+        focus.attr('transform', `translate(${x(d.date)}, ${y(d.val)})`);
+        focus.select('line.x')
+          .attr('x1', 0)
+          .attr('x2', -x(d.date))
+          .attr('y1', 0)
+          .attr('y2', 0);
+
+        focus.select('line.y')
+          .attr('x1', 0)
+          .attr('x2', 0)
+          .attr('y1', 0)
+          .attr('y2', height - y(d.val));
+
+        var t = '(' + d.year + ')  ' + d.val + ' crimes per 100,000 persons'
+        focus.select('text').text(t).style("fill: white")
+        getRegionData(d.year)
+      }
+
+      d3.select('.overlay')
+        .style("fill", 'none')
+        .style('pointer-events', 'all');
+
+      d3.selectAll('.focus')
+        .style('opacity', 0.7);
+
+      d3.selectAll('.focus circle')
+        .style("fill", 'none')
+        .style("stroke", 'black');
+
+      d3.selectAll('.focus line')
+        .style("fill", 'none')
+        .style("stroke", 'black')
+        .style("stroke-width", '1.5px')
+        .style("stroke-dasharray", '3 3');
+
+      var chart = d3.select('#chart')
+      document.addEventListener('scroll', function(evt) {
+        var ed = document.documentElement,
+          gd = document.getElementsByTagName('body')[0],
+          yw = window.innerHeight || ed.clientHeight || gd.clientHeight;
+          var body = document.body
+          var docHeight = Math.max( body.scrollHeight, body.offsetHeight,
+                                 ed.clientHeight, ed.scrollHeight, ed.offsetHeight );
+
+        if (height - ed.scrollTop < -60) {
+          if (ed.scrollTop + yw > docHeight - 200) {
+              chart.style('position', "absolute").style('margin-top', '25px')
+          } else {
+              chart.style('position', "fixed").style('margin-top', -height - 25 + 'px')
+          }
+        } else {
+          chart.style('position', "absolute").style('margin-top', '25px')
+        }
+      }, false)
+
+      // ==================================================
+      // region chart
+      // ==================================================
+      var r_svg = d3.select("#regionChart"),
+        r_margin = {
+          top: 20,
+          right: 20,
+          bottom: 20,
+          left: 20
+        },
+        r_width = parseInt(r_svg.style("width")) - r_margin.left - r_margin.right,
+        r_height = parseInt(r_svg.style("height")) - r_margin.top - r_margin.bottom;
+
+      var r_x = d3.scaleBand().rangeRound([0, r_width]).paddingInner(0.05)
+        .align(0.1);
+      var r_y = d3.scaleLinear().rangeRound([r_height, 0]);
+      var r_z = d3.scaleOrdinal().range(["#98abc5", "#ff8c00"]);
+
+      var r_series = Object.keys(all_series)
+        .filter(k => k.indexOf('Distribution') != -1 && k.indexOf('total') == -1)
+
+      var locations = ['West', 'Midwest', 'South', 'Northeast']
+      r_x.domain(locations);
+      r_y.domain([0, 10000]);
+      r_z.domain(['Violent', 'Property']);
+
+      // update things
+      function getRegionData(year) {
+        selectedYear = year
+        var yearIDX = all_series[r_series[0]].findIndex(function(d) {
+          return d.year == year
+        })
+        var datas = r_series.map(function(v, i) {
+          n = v.split(" ")
+          return {
+            region: n[n.length - 1],
+            val: all_series[v][yearIDX].val,
+            type: n[n.length - 4]
+          }
+        })
+        var stack = locations.map(function(l) {
+          return {
+            region: l
+          }
+        })
+        for (var i in datas) {
+          var idx = stack.findIndex(function(d) {
+            return d.region == datas[i].region
+          })
+          stack[idx][datas[i].type] = datas[i].val
+        }
+
+        var event = new CustomEvent('timeLineChange', {
+          detail: {
+            stack: stack,
+            year:year
+          }
+        });
+        document.dispatchEvent(event);
+
+        r_svg.selectAll("*").remove();
+        var r_g = r_svg.append("g").attr("transform", "translate(" + r_margin.left +
+          "," + r_margin.top + ")");
+
+        r_g.append("g")
+          .selectAll("g")
+          .data(d3.stack().keys(['Violent', 'Property'])(stack))
+          .enter().append("g")
+          .attr("fill", function(d) {
+            return r_z(d.key);
+          })
+          .selectAll("rect")
+          .data(function(d) {
+            return d;
+          })
+          .enter().append("rect")
+          .attr("x", function(d) {
+            return r_x(d.data.region);
+          })
+          .attr("y", function(d) {
+            return r_y(d[1]);
+          })
+          .attr("height", function(d) {
+            return r_y(d[0]) - r_y(d[1]);
+          })
+          .attr("width", r_x.bandwidth());
+
+        r_g.append("g")
+          .attr("class", "axis")
+          .attr("transform", "translate(0," + r_height + ")")
+          .call(d3.axisBottom(r_x));
+        //
+        // r_g.append("g")
+        //     .attr("class", "axis")
+        //     .call(d3.axisLeft(r_y).ticks(null, "s"))
+        //   .append("text")
+        //     .attr("x", 2)
+        //     .attr("y", r_y(r_y.ticks().pop()) + 0.5)
+        //     .attr("dy", "0.32em")
+        //     .attr("fill", "#000")
+        //     .attr("font-weight", "bold")
+        //     .attr("text-anchor", "start")
+        //     .text("Population");
+
+      }
+      getRegionData('2010')
+
+      // ==================================================
+      // US States Map
+      // ==================================================
+      d3.json("/d3/us-states.json", function(json) {
+
+        var m_svg = d3.select("#regionMap"),
+          m_margin = {
+            top: 20,
+            right: 20,
+            bottom: 20,
+            left: 20
+          },
+          m_width = parseInt(m_svg.style("width")) - m_margin.left - m_margin.right,
+          m_height = m_width / 2;
+
+        var projection = d3.geoAlbersUsa()
+          .translate([m_width / 2, m_height / 2])
+          .scale([m_width]);
+        var path = d3.geoPath()
+          .projection(projection);
+
+        m_svg.attr("width", m_width)
+          .attr("height", m_height)
+          .attr("transform",
+            "translate(" + margin.left + "," + margin.top + ")");
+
+        var stateReg = {
+          "Alabama": "South",
+          "Alaska": "West",
+          "Arkansas": "South",
+          "Arizona": "West",
+          "California": "West",
+          "Colorado": "West",
+          "Connecticut": "Northeast",
+          "Delaware": "South",
+          "Florida": "South",
+          "Georgia": "South",
+          "Hawaii": "West",
+          "Iowa": "Midwest",
+          "Idaho": "West",
+          "Illinois": "Midwest",
+          "Indiana": "Midwest",
+          "Kansas": "Midwest",
+          "Kentucky": "South",
+          "Louisiana": "South",
+          "Maine": "Northeast",
+          "Maryland": "South",
+          "Massachusetts": "Northeast",
+          "Michigan": "Midwest",
+          "Minnesota": "Midwest",
+          "Missouri": "Midwest",
+          "Mississippi": "South",
+          "Montana": "West",
+          "North Carolina": "South",
+          "North Dakota": "Midwest",
+          "Nebraska": "Midwest",
+          "New Hampshire": "Northeast",
+          "New Jersey": "Northeast",
+          "New Mexico": "West",
+          "Nevada": "West",
+          "New York": "Northeast",
+          "Ohio": "Midwest",
+          "Oklahoma": "South",
+          "Oregon": "West",
+          "Pennsylvania": "Northeast",
+          "Rhode Island": "Northeast",
+          "South Carolina": "South",
+          "South Dakota": "Midwest",
+          "Tennessee": "South",
+          "Texas": "South",
+          "Utah": "West",
+          "Virginia": "South",
+          "Vermont": "Northeast",
+          "Washington": "West",
+          "Wisconsin": "Midwest",
+          "West Virginia": "South",
+          "Wyoming": "West",
+        }
+
+        // Find the corresponding state inside the GeoJSON
+        for (var j = 0; j < json.features.length; j++) {
+          var jsonState = json.features[j].properties.name;
+          json.features[j].properties.region = stateReg[jsonState];
+        }
+
+        var paths = d3.select("#regionMap").selectAll("path")
+
+        paths.data(json.features)
+          .enter()
+          .append("path")
+          .attr("d", path)
+          .style("stroke", "#fff")
+          .style("stroke-width", "1")
+
+        document.addEventListener('timeLineChange', function(evt) {
+
+          data = {}
+          var values = evt.detail.stack.map(function(d) {
+            data[d.region] = d.Property + d.Violent
+            return d.Property + d.Violent
+          })
+
+          var max = d3.max(values)
+
+          d3.select("#regionMap").selectAll("path")
+            .style("fill", function(d) {
+
+              // Get data value
+              var value = data[d.properties.region] / max;
+              var redColorScale = d3.scaleSequential(d3.interpolateOranges)
+                .domain([.5, 1])
+
+              if (value) {
+                return redColorScale(value);
+              } else {
+                return "#FFF";
+              }
+            })
+        })
+      });
+
+      // ==================================================
+      // Crime Types chart
+      // ==================================================
+
+      var populations = ["crime_rates", "arrests", "prisoners"]
+      var c_types = {
+        assault: [
+          "arrests All Offenses Aggravated Assault",
+          "crime_rates Crime Rate by Type (per 100,000 persons) Violent Crime Aggravated assault",
+          "prisoners State Jurisdiction % Aggravated assault"
+        ],
+        murder: [
+          "arrests All Offenses Murder and Non-Negligent Manslaughter",
+          "crime_rates Crime Rate by Type (per 100,000 persons) Violent Crime Murder and nonnegligent manslaughter",
+          "prisoners State Jurisdiction % Murder"
+        ],
+        rape: [
+          "arrests All Offenses Forcible Rape",
+          "crime_rates Crime Rate by Type (per 100,000 persons) Violent Crime Rape",
+          "prisoners State Jurisdiction % Rape/sexual assault"
+        ],
+        robbery: [
+          "arrests All Offenses Robbery",
+          "crime_rates Crime Rate by Type (per 100,000 persons) Violent Crime Robbery",
+          "prisoners State Jurisdiction % Robbery"
+        ]
+      }
+
+      // get data
+      var c_series = []
+      populations.forEach(function(v,i){
+        thisSeries = {}
+        for(var j in c_types){
+          thisSeries[j] = all_series[c_types[j][i]]
+        }
+        c_series.push(thisSeries)
+      })
+      var c_width = parseInt(d3.select("#crimetypes").style("width"))
+      var c_height = parseInt(d3.select("#crimetypes").style("height"))
+
+      var types = d3.select("#crimetypes")
+        .selectAll("types")
+        .data(populations)
+        .enter().append("g")
+        .attr("width", c_width)
+        .attr("height", d => c_height / 3)
+        .attr("transform", function(d,i){
+          return "translate(0," + c_height / 4 * i + ")";
+        })
+        .attr("class", (d) => 'types ' + d)
+
+      types.append("text")
+        .attr("x", 40 )
+        .attr("y", c_height / 3 / 2 + 30)
+        .attr("dy", ".35em")
+        .text(function(d) { return d.replace("_"," ").toUpperCase(); })
+        .style("font-size","15px")
+        .style("font-weight","100")
+
+
+      var writeheader = true
+      var headers = types.selectAll(".headers")
+        .data(function(d,i){
+          return Object.keys(c_series[i])
+        })
+        .enter().append("text")
+        .text(function(d,i) {
+          var txt = writeheader ? d : ''
+          if (i == 3) {
+            writeheader = false
+          }
+          return txt.toUpperCase()
+        })
+        .attr("class", (d) => 'headers ' + d)
+        .attr("x", function (d,i) {
+          return c_width / 5 * (i+1) - 30
+        })
+        .attr("y", function (d,i) {
+          return 15
+        })
+        .style("stroke", function(d) {
+          return '#000';
+        })
+        .attr("dy", ".35em")
+        .style("font-size","15px")
+        .style("font-weight","100")
+
+      var circles = types.selectAll("circle")
+        .data(function(d,i){
+          return Object.keys(c_series[i])
+        })
+        .enter().append("circle")
+        .attr("class", (d) => 'circle ' + d)
+        .attr("cx", function (d,i) {
+          return c_width / 5 * (i+1)
+        })
+        .attr("cy", function (d,i) {
+          return c_height / 3 / 2 + 30
+        })
+        .attr("r", function (d) {
+          return 10;
+        })
+        .style("fill", function(d) {
+          return '#000';
+        })
+
+      var crimeColorScale = d3.scaleSequential(d3.interpolateOranges)
+        .domain([0, 1])
+
+      document.addEventListener('timeLineChange', function(evt) {
+
+        var idx = 0 // hack to get around type index
+        var idx1 = 0
+        var idx2 = 0
+        circles
+          .style("fill", function(d,i) {
+            var y = c_series[idx][d].findIndex(function(point){
+              return point.year == evt.detail.year
+            })
+            var color = crimeColorScale(c_series[idx][d][y].valNor)
+            if (i == 3) idx++
+            return color
+          })
+          .style("r", function(d,i) {
+            var y = c_series[idx1][d].findIndex(function(point){
+              return point.year == evt.detail.year
+            })
+            var w = (c_series[idx1][d][y].valNor * 5 || .4) + '%'
+            if (i == 3) idx1++
+            return w
+          })
+      });
+
+
+      // ===========================
+      // Select comparators
+      // ===========================
+
+      var comp_a_svg = d3.select("#arrests_compare"),
+          comp_p_svg = d3.select("#prisoners_compare"),
+          comp_width = parseInt(comp_a_svg.style("width")),
+          comp_height = parseInt(comp_a_svg.style("height")),
+          comp_radius = Math.min(width, height) / 2,
+          comp_a_g = comp_a_svg.append("g").attr("transform", "translate(" + width / 2 + "," + height / 2 + ")");
+          comp_p_g = comp_p_svg.append("g").attr("transform", "translate(" + width / 2 + "," + height / 2 + ")");
+
+      var pie = d3.pie()
+          .sort(null)
+          .value(function(d) {
+            return d.population; });
+
+      var path = d3.arc()
+          .outerRadius(comp_radius - 10)
+          .innerRadius(0);
+
+      var label = d3.arc()
+          .outerRadius(comp_radius - 40)
+          .innerRadius(comp_radius - 40);
+
+
+      var selectedYear = ''
+      var selectedData = []
+      document.addEventListener('timeLineChange', function(evt) {
+        year = evt.detail.year
+        comparator_change({target: { type: 'select'}})
+      })
+      document.querySelector('body').onchange=comparator_change;
+
+      var selectData = ["total", "All Ages", "total", "all", "all"]
+      function comparator_change(event) {
+
+        var elem = event.target;
+        if (elem.type.indexOf('select') !== -1){
+
+          // clear out previous data
+          comp_a_svg.selectAll(".comp_a_arc").remove();
+          comp_p_svg.selectAll(".comp_p_arc").remove();
+
+          // get value of all selects
+          selectData = []
+          d3.selectAll('select').each(function(d) {
+            selectData.push(d3.select(this).property("value"))
+          })
+
+          // Get data for first graph
+          var arStr = 'arrests ' + selectData[1] + ' ' + selectData[0]
+          var ar = all_series[arStr].findIndex(function(point){
+            return point.year == selectedYear
+          })
+          var popStr = 'population Race and Ethnicity ' + selectData[2]
+          var pop = all_series[popStr].findIndex(function(point){
+            return point.year == selectedYear
+          })
+          var rate = all_series[arStr][ar].val / all_series[popStr][pop].val
+          var dat = [{
+            label: 'total',
+            population: all_series[popStr][pop].val - all_series[arStr][ar].val,
+            rate: rate
+          },{
+            label: selectData[0] + ' ' + selectData[1],
+            population: all_series[arStr][ar].val,
+            rate: rate
+          }]
+          var comp_a_arc = comp_a_g.selectAll(".comp_a_arc")
+            .data(pie(dat))
+            .enter().insert("g")
+              .attr("class", "comp_a_arc");
+
+          comp_a_arc.insert("path")
+              .attr("d", path)
+              .attr("fill", function(d) {
+                return  d.index ? "#ff8c00" : "#98abc5";
+              });
+          comp_a_arc.insert("text")
+              .attr("transform", function(d) { return "translate(" + label.centroid(d) + ")"; })
+              .attr("dy", "0.35em")
+              .text(function(d) {
+                return (d.data.rate.toFixed(2) * 100 || '' ) + '% ' + d.data.label; });
+
+        }
+      }
+
+      // ================================================
+      // Everything!
+      // ================================================
+
+      var e_margin = { top: 40,right: 40,bottom: 40,left: 40 },
+        e_width = parseInt(d3.select("#everything").style("width")) - e_margin.left - e_margin.right,
+        e_height = parseInt(d3.select("#everything").style("height")) - e_margin.top - e_margin.bottom;
+        e_x = d3.scaleTime().range([0, e_width]),
+        e_y = d3.scaleLinear().range([e_height, 0]);
+
+      var e_valueline = d3.line()
+        .defined(function(d) {
+          return d.val != 0 &&
+            d.val != 'nan' &&
+            !isNaN(d.val)
+        })
+        .x(function(d) {
+          return e_x(d.date);
+        })
+        .y(function(d) {
+          return e_y(d.valNor);
+        });
+
+      var e_svg = d3.select("#everything").append("svg")
+        .attr("width", e_width + e_margin.left + e_margin.right)
+        .attr("height", e_height + e_margin.top + e_margin.bottom)
+        .append("g")
+        .attr("transform",
+          "translate(" + e_margin.left + "," + e_margin.top + ")");
+
+      e_x.domain(d3.extent(formatYears(totalYears)));
+      e_y.domain([0, 1]);
+
+      // Add the valueline path.
+      var e_series = []
+      for (var i in all_series){
+        if (all_series[i].length > 36){
+          all_series[i] = all_series[i].slice(0,-1)
+        }
+        if (i.indexOf('total') == -1){
+          e_series.push(all_series[i])
+        }
+      }
+      e_series.forEach(function(td){
+        e_svg.append("path")
+            .data([td])
+            .attr("class", "line2")
+            .attr("d", e_valueline)
+            .style('stroke-width', '3')
+            .on("mouseover", function(d){
+              var name = d[0].name
+              d3.select("div#ehoverData")
+              .text(function(d){
+                return name.join(" : ").toUpperCase()
+              })
+              .style('color', '#DF0072')
+              d3.select(this).style('stroke', '#DF0072');
+            })
+            .on("mouseout", function(d){
+              // d3.select("div#hoverData").text(d.name)
+              d3.select(this).style('stroke', color(1));
+            });
+
+      })
+
+      // Add the X Axis
+      e_svg.append("g")
+          .attr("transform", "translate(0," + e_height + ")")
+          .call(d3.axisBottom(e_x));
+
+    });
+  </script>
+</body>
+
+</html>
